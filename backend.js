@@ -16,29 +16,14 @@ function Backend(opts, callback) {
     } else if (opts.uri) {
         tilelive.load(opts.uri, function(err, source) {
             if (err) return callback(err);
-            source.getInfo(function(err, info) {
-                if (err) return callback(err);
-                setsource(source, info);
-            });
+            setsource(source);
         });
     } else {
         if (callback) callback(new Error('opts.uri or opts.source must be set'));
     }
 
-    function setsource(source, info) {
-        backend._minzoom = info.minzoom || 0;
-        backend._maxzoom = info.maxzoom || 22;
-        backend._vector_layers = info.vector_layers || undefined;
-        backend._layer = backend._layer ||
-            (info.vector_layers && info.vector_layers.length && info.vector_layers[0].id) ||
-            '_image';
-        // @TODO some sources filter out custom keys @ getInfo forcing us
-        // to access info/data properties directly. Fix this.
-        if ('maskLevel' in info && !isNaN(parseInt(info.maskLevel, 10))) {
-            backend._maskLevel = parseInt(info.maskLevel, 10);
-        } else if (source.data && 'maskLevel' in source.data) {
-            backend._maskLevel = source.data.maskLevel;
-        }
+    function setsource(source) {
+
         backend._source = source;
         if (callback) callback(null, backend);
     }
@@ -50,7 +35,7 @@ Backend.prototype.getInfo = function(callback) {
 };
 
 // Wrapper around backend.getTile that implements a "locking" cache.
-Backend.prototype.getTile = function(z, x, y, callback) {
+Backend.prototype.getTile = function(m, z, x, y, callback) {
     if (!this._source) return callback(new Error('Tilesource not loaded'));
 
     var backend = this;
@@ -82,14 +67,14 @@ Backend.prototype.getTile = function(z, x, y, callback) {
     var size = 0;
     var headers = {};
 
-    source.getTile(bz, bx, by, function sourceGet(err, body, head) {
+    source.getTile(m, bz, bx, by, true, function sourceGet(err, body, head) {
         if (typeof backend._maskLevel === 'number' &&
             err && err.message === 'Tile does not exist' &&
             bz > backend._maskLevel) {
             bz = backend._maskLevel;
             bx = Math.floor(x / Math.pow(2, z - bz));
             by = Math.floor(y / Math.pow(2, z - bz));
-            return source.getTile(bz, bx, by, sourceGet);
+            return source.getTile(m, bz, bx, by, true, sourceGet);
         }
         if (err && err.message !== 'Tile does not exist') return callback(err);
 
@@ -115,7 +100,7 @@ Backend.prototype.getTile = function(z, x, y, callback) {
                 if (err) return callback(err);
                 return makevtile(null, data, 'pbf');
             });
-        // Image sources do not allow overzooming (yet).
+            // Image sources do not allow overzooming (yet).
         } else if (bz < z) {
             return makevtile();
         } else {
@@ -133,8 +118,8 @@ Backend.prototype.getTile = function(z, x, y, callback) {
 
         // Set an ETag if not present.
         headers['ETag'] = headers['ETag'] || JSON.stringify(crypto.createHash('md5')
-            .update((z+','+x+','+y) + (data||''))
-            .digest('hex'));
+                .update((z+','+x+','+y) + (data||''))
+                .digest('hex'));
 
         // Set content type.
         headers['Content-Type'] = 'application/x-protobuf';

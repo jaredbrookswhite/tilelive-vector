@@ -5,7 +5,7 @@
   "description": "Vector tile => raster tile backend for tilelive",
   "repository": {
     "type": "git",
-    "url": "git://github.com/mapbox/tilelive-vector.git"
+    "url": "https://github.com/jaredbrookswhite/tilelive-vector.git"
   },
   "licenses": [
     {
@@ -21,18 +21,6 @@
     "sphericalmercator": "~1.0.2",
     "spherical": "0.0.1",
     "underscore": "~1.6.0"
-  },
-  "devDependencies": {
-    "mapbox-studio-default-style": "1.0.1",
-    "istanbul": "~0.3.17",
-    "coveralls": "~2.11.2",
-    "tape": "2.13.x",
-    "tilejson": "~0.6.0",
-    "simple-statistics": "~0.8.0"
-  },
-  "scripts": {
-    "test": "tape test/*.js",
-    "coverage": "istanbul cover tape test/*.js && coveralls < ./coverage/lcov.info"
   },
   "engines": {
     "node": "0.10.x"
