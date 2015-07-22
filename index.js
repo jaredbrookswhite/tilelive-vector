@@ -3,7 +3,6 @@ var mapnik = require('mapnik');
 var fs = require('fs');
 var tar = require('tar');
 var url = require('url');
-var qs = require('querystring');
 var zlib = require('zlib');
 var path = require('path');
 var os = require('os');
@@ -117,7 +116,7 @@ Vector.prototype.update = function(opts, callback) {
     return;
 };
 
-Vector.prototype.getTile = function(z, x, y, callback) {
+Vector.prototype.getTile = function(m, z, x, y, callback) {
     if (!this._map) return callback(new Error('Tilesource not loaded'));
     // Hack around tilelive API - allow params to be passed per request
     // as attributes of the callback function.
@@ -140,23 +139,23 @@ Vector.prototype.getTile = function(z, x, y, callback) {
 
         var headers = {};
         switch (format.match(/^[a-z]+/i)[0]) {
-        case 'headers':
-            // No content type for header-only.
-            break;
-        case 'json':
-        case 'utf':
-            headers['Content-Type'] = 'application/json';
-            break;
-        case 'jpeg':
-            headers['Content-Type'] = 'image/jpeg';
-            break;
-        case 'svg':
-            headers['Content-Type'] = 'image/svg+xml';
-            break;
-        case 'png':
-        default:
-            headers['Content-Type'] = 'image/png';
-            break;
+            case 'headers':
+                // No content type for header-only.
+                break;
+            case 'json':
+            case 'utf':
+                headers['Content-Type'] = 'application/json';
+                break;
+            case 'jpeg':
+                headers['Content-Type'] = 'image/jpeg';
+                break;
+            case 'svg':
+                headers['Content-Type'] = 'image/svg+xml';
+                break;
+            case 'png':
+            default:
+                headers['Content-Type'] = 'image/png';
+                break;
         }
         headers['ETag'] = JSON.stringify(crypto.createHash('md5')
             .update(scale + source._md5 + (head && head['ETag'] || (z+','+x+','+y)))
@@ -168,7 +167,7 @@ Vector.prototype.getTile = function(z, x, y, callback) {
 
         loadtime = (+new Date) - loadtime;
         drawtime = +new Date;
-        var opts = {z:z, x:x, y:y, scale:scale, buffer_size:256 * scale};
+        var opts = {m:m, z:z, x:x, y:y, scale:scale, buffer_size:256 * scale};
         if (format === 'json') {
             try { return callback(null, vtile.toJSON(), headers); }
             catch(err) { return callback(err); }
@@ -215,7 +214,7 @@ Vector.prototype.getTile = function(z, x, y, callback) {
     cb.format = format;
     cb.scale = scale;
     cb.legacy = legacy;
-    source._backend.getTile(z, x, y, cb);
+    source._backend.getTile(m, z, x, y, cb);
 };
 
 Vector.prototype.getGrid = function(z, x, y, callback) {
@@ -238,28 +237,28 @@ Vector.prototype.getInfo = function(callback) {
     var params = this._map.parameters;
     this._info = Object.keys(params).reduce(function(memo, key) {
         switch (key) {
-        // The special "json" key/value pair allows JSON to be serialized
-        // and merged into the metadata of a mapnik XML based source. This
-        // enables nested properties and non-string datatypes to be
-        // captured by mapnik XML.
-        case 'json':
-            try { var jsondata = JSON.parse(params[key]); }
-            catch (err) { return callback(err); }
-            Object.keys(jsondata).reduce(function(memo, key) {
-                memo[key] = memo[key] || jsondata[key];
-                return memo;
-            }, memo);
-            break;
-        case 'bounds':
-        case 'center':
-            memo[key] = params[key].split(',').map(function(v) { return parseFloat(v) });
-            break;
-        case 'scale':
-            memo[key] = params[key].toString();
-            break;
-        default:
-            memo[key] = params[key];
-            break;
+            // The special "json" key/value pair allows JSON to be serialized
+            // and merged into the metadata of a mapnik XML based source. This
+            // enables nested properties and non-string datatypes to be
+            // captured by mapnik XML.
+            case 'json':
+                try { var jsondata = JSON.parse(params[key]); }
+                catch (err) { return callback(err); }
+                Object.keys(jsondata).reduce(function(memo, key) {
+                    memo[key] = memo[key] || jsondata[key];
+                    return memo;
+                }, memo);
+                break;
+            case 'bounds':
+            case 'center':
+                memo[key] = params[key].split(',').map(function(v) { return parseFloat(v) });
+                break;
+            case 'scale':
+                memo[key] = params[key].toString();
+                break;
+            default:
+                memo[key] = params[key];
+                break;
         }
         return memo;
     }, {});
@@ -387,8 +386,8 @@ Vector.prototype.profile = function(callback) {
                             if (z < center[2]) {
                                 var xyz = sm.xyz([center[0], center[1], center[0], center[1]], z+1);
                                 getTiles(z+1, xyz.minX, xyz.minY);
-                            // profiling zxy @ zoomlevel >= center.
-                            // next zxy descend based on densest tile.
+                                // profiling zxy @ zoomlevel >= center.
+                                // next zxy descend based on densest tile.
                             } else {
                                 getTiles(z+1, tiles[0].x * 2, tiles[0].y * 2);
                             }
@@ -401,10 +400,7 @@ Vector.prototype.profile = function(callback) {
 };
 
 function tm2z(uri, callback) {
-    if (typeof uri === 'string') {
-        uri = url.parse(uri, true);
-        uri.pathname = qs.unescape(uri.pathname);
-    }    
+    uri = typeof uri === 'string' ? url.parse(uri) : uri;
 
     var maxsize = {
         file: uri.filesize || 750 * 1024,
